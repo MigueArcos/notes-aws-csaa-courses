@@ -390,4 +390,366 @@ By default as soon as an instance is launched in an ASG it's in service.
     - Can use T2 unlimited burst feature
     - Recommended by AWS going forward
 
+# RDS (Relational Database Service)
+It's a managed DB service for DB, it uses SQL as a query language and allows  to create databases in the cloud that are managed by AWS.
+The following are the Databases supported by RDS:
+
+- Postgres
+- MySQL
+- MariaDB
+- Oracle
+- Microsoft SQL Server
+- Aurora (AWS Proprietary database)
+
+The features of RDS are the following: 
+
+- Automated provisioning, OS patching
+- Continuous backups and restore to specific timestamp (Point in Time Restore)!
+- Monitoring dashboards
+- Read replicas for improved read performance
+- Multi AZ setup for DR (Disaster Recovery)
+- Maintenance windows for upgrades
+- Scaling capability (vertical and horizontal)
+- Storage backed by EBS (gp2 or io l)
+- **YOU CAN'T**  SSH into your instances
+
+## RDS Backups
+Backups are automatically enabled in RDS
+
+- Automated backups:
+    - Daily full backup of the database (during the maintenance window)
+    - Transaction logs are backed-up by RDS every 5 minutes
+    - Ability to restore to any point in time (from oldest backup to 5 minutes ago)
+    - 7 days retention (can be increased to 35 days)
+- DB Snapshots:
+    - Manually triggered by the user
+    - Retention of backup for as long as you want
+
+## RDS Auto scaling
+When RDS detects you are running out of free database storage, it scales automatically. This avoids manually scaling the database storage, to do so
+ you have to set Maximum Storage Threshold (maximum limit for DB storage)-
+This is useful for applications with unpredictable workloads and supports all RDS database engines (MariaDB, MySQL, PostgreSQL, SQL Server, Oracle)
+
+## RDS Read Replica
+A read replica is a copy of a RDS instance, that is used only for lectures (SELECT), the synchronization happens async, so read are eventually consistent.
+One main RDS instance can have up to 5 read replicas within AZ, Cross AZ or Cross Region, to use the read replicas the applications connecting to RDS have to update their connection strings to connect to the replicas.
+One use case for the read replicas is the following:
+
+- You have a production database that is taking on normal load
+- You want to run a reporting application to run some analytics
+- You create a Read Replica to rur the new workload there
+- The production application is unaffected
+
+> Note: In AWS there's a network cost when data goes from one AZ to another, but since RDS is a managed service you don't have to pay that fee for Read Replicas within the same region (But you would need to pay in case the read replica is in another region)
+
+## RDS Multi AZ
+RDS Multi AZ have the following features:
+
+- SYNC replication
+- One DNS name — automatic app
+- failover to standby
+- Increase availability
+- Failover in case of loss of AZ, loss of network, instance or storage failure
+- No manual intervention in apps
+- Not used for scaling
+
+> Note: The Read Replicas can be setup as Multi AZ for Disaster Recovery (DR)
+
+## RDS Security Summary
+We have 2 Type of encryptions: In Flight Encryption and At rest Encryption
+- For Encryption at rest:
+    - Is done only when you first create the DB instance
+    - Or: unencrypted DB => snapshot => copy snapshot as encrypted => create DB from snapshot
+- For In Flight Encryption
+    - Use SSL Certificates to encrypt data in flight
+    - The SSL option must be enabled in the database engine
+- Your responsibility:
+    - Check the ports / IP / security group inbound rules in DB's SG
+    - In-database user creation and permissions or manage through IAM (IAM only works for mysql and postgresql)
+    - Creating a database with or without public access
+    - Ensure parameter groups or DB is configured to only allow SSL connections
+- AWS responsibility:
+    - No SSH access
+    - No manual DB patching
+    - No manual OS patching
+    - No way to audit the underlying instance
+
+> Note: If a master DB is not encrypted the read replicas cannot be encrypted
+
+## RDS Aurora 
+Aurora is a proprietary technology from AWS (not open sourced). Postgres and MySQL are both supported as Aurora DB (that means your drivers will work as if Aurora was a Postgres or MySQL database).
+Aurora is "AWS cloud optimized" and claims 5x performance improvement over MySQL on RDS, over 3x the performance of Postgres on RDS.
+The main features of Aurora are the following:
+
+- Aurora storage automatically grows in increments of I OGB, up to 64 T B.
+- Aurora can have 15 replicas while MySQL has 5, and the replication process is faster (sub 10 ms replica lag)
+- Failover in Aurora is instantaneous. It's HA native.
+- Aurora costs more than RDS (20% more) — but is more efficient
+- It has a DNS Writer endpoint, this endpoint will automatically route the data to the master instances (also named writer instances)
+- It has a reader endpoint, this endpoint will automatically read data from any of the replica instances (This happen under the hoods)
+- It uses a shared storage volume for the cluster that can grow automatically from 10GB up to 64TB
+- It's the same than a RDS of MySQl or Postgres in terms of security (IAM capable, encryption, automated backups)
+- There are 4 modes, One Writer & Multiple Reads (General purpose, the volume is splitted in 100s around different availability zones, we can enable Multi AZ)One Writer & Multiple Reads - Parallel Query, Multiple Writers,  Serverless (Unpredictable workload, based on the load it will scale the number of replicas and the storage capacity)
+- We can setup auto sacling for aurora replicas
+- We can create custom endpoints, for example create powerful instances in the cluster for big data quries, accessthese instances throught that custom endpoint and access the less powerful instances throught another custom endpoint, generally when using custom endpoints we don't use the reader endpoint itself, but it still works
+- Aurora Multi-Master is a feature that allows every node in the cluster to be RW, instead of only one (or more) writer instance(s), this way we have inmediate faiolver in case the writer instance(s) fails because it doesn't have to convert one of the replicas to the new writer instance
+- Global Aurora can be setup using Cross Regional Read Replicas or Aurora Global Database (Recommended), this way there is one primary region where RW happens, up to 5 secondary regions (read only, lag < 1 second) and up to 16 replicas per secondary region. In case of disaster in the main region it takes less than one minute to promote to another region the data
+- Aurora has integrations with AWS Machine Learning services such as SageMaker, Comprehended, use case of this are for example antifraud, ads targetting or product recommendations
+
+# ElastiCache
+ElastiCache is to get managed Redis or Memcached, the same way RDS is to get managed Relational Databases. Caches are in-memory databases with really high performance and low latency.
+Features of ElastiCache:
+
+- Helps reduce load off of databases for read intensive workloads
+- Helps make your application stateless
+- AWS takes care of OS maintenance / patching, optimizations, setup, configuration, monitoring, failure recovery and backups
+- Using ElastiCache involves heavy application code changes
+- Cache must have and invalidation strategy to make sure the newest data is used in there
+- Use case: Store session data in ElastiCcahe to avoid losing that data for example in a Load Balancer
+- ElastiCache caches (redis & memcached) don't support IAM Authentication, IAM is only at Elasticache service level
+- Redis supports password/token auth and SSL encryption
+- Memcached supports SASL based authentication
+- There are 3 patterns for ElastiCache
+    1. Lazy Loading: all the read data is cached, data can become stale in cache
+    2. Write Through: Adds or update data in the cache when written to a DB (no stale data)
+    3. Session Store: store temporary session data in a cache (using TTL features)
+- Redis have one nice and super useful feature, the **Sorted Sets**, this sets allows us to create for example a leaderboard in real time, because it gurantees uniqueness and element ordering. Each time a new element is added it's ranked in real time and added in correct order
+
+> Quote: *There are only two hard things in Computer Science: cache invalidation and naming things*
+
+# Route53
+Route53 is a Managed DNS (Domain Name System)
+In AWS, the most common records are:
+
+- A: hostname to IPv4
+- AAAA: hostname to IPv6
+- CNAME: hostname to hostname (Only works for non root domain ex. app.mydomain.com, any host allowed)
+- Alias: hostname to AWS resource (can be either a root or non root domain)
+
+Route53 can use:
+- Public domain names you own (or buy)
+- Private domain names that can be resolved by your instances in yourVPCs.
+
+Route53 has advanced features such as:
+
+- Load balancing (through DNS — also called client load balancing)
+- Health checks (although limited... )
+- Routing policy: simple, failover; geolocation, latency, weighted, multi value
+
+Route53 cost $0.50 per month per hosted zone
+
+> The DNS protocol does not allow you to create a CNAME record for the top node of a DNS namespace (mycoolcompany.com), also known as the zone apex
+
+## Route53 TTL
+Each time we create a record in Route53 we must specify the TTL (Time To Live) for that record, the TTL is the time that client machines are going to cache the DNS name to avoid go again and again for the address of that domain name
+
+## Route53 Simple Routing Policy
+Used when need to redirect to a single resource, you can't attach health checks to simple policies. 
+If multiple values are returned as the resolution of the DNS then a random one is chosen by the **CLIENT**, this is called client side load balancing
+
+## Route53 Weighted Policy
+This policy controls the % of the requests that go to specific endpoint. It could be helpful to test % of traffc on new app version for example and also is helpful to split traffic between two regions. It can be associated with health Checks, to use it you need to create multiple records of type Weighted with the same DNS name and set an specific weight to each record, can be a value between 0-255 but in the end it will take an average to calculate the % of traffic
+
+## Route53 Latency Policy
+This policy redirects to the server that has the least latency close to us.
+It's super helpful when latency of users is a priority. Latency is evaluated in terms of user to designated AWS Region (Ex. Germany may be directed to the US (if that's the lowest latency))
+
+## Route53 Health Checks
+We can enable health checks for Route53, those health checks works on HTTP, HTTPS (No SSL verification) and TCP. You can configure 2 intervals for health health checks: 30s (Default) and 10s (mosre expensive)
+
+## Route53 Failover Policy
+This policy redirects a user to one instance (called primary) in all cases but if that instance is unhealthy (You must enable health checks on primary) then the traffic is send to the secondary instance (This does not need to have health checks attached to it)
+
+## Route53 Geolocation Policy
+This is routing based on user location, you define rules per country or per continent (Mx connect to this intance, Ireland to this other one and South America to this other one)
+
+## Route53 Geoproximity Policy
+Route traffc to your resources based on the geographic location of users and resources
+Ability to shift more traffc to resources based on the defined bias
+To change the size of the geographic region, specify bias values:
+- To expand (l to 99) — more traffic to the resource
+- To shrink (-1 to -99) — less traffic to the resource
+
+## Route53 Multivalue Routing Policy
+
+- Use when routing traffic to multiple resources
+- Want to associate a Route 53 health checks with records
+- Up to 8 healthy records are returned for each Multi Value query
+- Multi Value is not a substitute for having an ELB
+
+## Route53 Third Party
+A domain name registrar is an organization that manages the reservation of Internet domain names
+Famous names:
+
+- GoDaddy
+- Google Domains
+- Etc...
+- And also... Route53 (e.g. AWS)!
+
+Domain Registrar != DNS
+
+If you buy your domain on 3rd party website, you can still use Route53.
+
+1. Create a Hosted Zone in Route 53
+2. Update NS (Name servers) Records on 3rd party website to use Route 53 name servers
+
+# 5 Pillars for a well architected apllication
+
+- Cost
+- Performance
+- Reliability
+- Security
+- Operational Excellence
+
+# Elastic Beanstalk
+Elastic Beanstalk is a developer centric view of deploying an application on AWS.
+It uses all the component's we've seen before: EC2, ASG, ELB, RDS, etc and it's a managed service with the following features:
+
+- Automatically handles capacity provisioning, load balancing, scaling, application health monitoring, instance configuration, etc
+- Just the application code is the responsibility of the developer
+- We still have full control over the configuration
+- Beanstalk is free but you pay for the underlying instances
+
+Elastic Beanstalk comes in game to solve the following problems that lots of developers have in their daily basis:
+
+- Managing infrastructure
+- Deploying Code
+- Configuring all the databases, load balancers, etc
+- Scaling concerns
+- Most web apps have the same architecture (ALB + ASG)
+- All the developers want is for their code to run!
+- Possibly, consistently across different applications and environments
+
+## Elastic Beanstalk components
+- Application: collection of Elastic Beanstalk components (environments, versions, configurations, etc)
+- Application Version: an iteration of your application code
+- Environment
+    - Collection of AWS resources running an application version (only one application version at a time)
+    - Tiers: Web Server Environment Tier & Worker Environment Tier
+    - You can create multiple environments (dev, test, prod, etc)
+
+## Elastic Beanstalk supported platforms
+Elastic Beanstalk suports the following programming languages: Go, Java SE, Java with Tomcat, .NET Core on Linux, .NET on Windows Server, Node.js, Python, Ruby, Packer Builder, Single Container Docker, Multi-container Docker, Preconfigured Docker
+And if not supported, you can write your custom platform (advanced)
+
+# S3
+Amazon S3 allows people to store objects (files) in "buckets" (directories)
+## S3 Buckets
+Buckets must have a globally unique name across all accounts in AWS, they are defined at the region level.
+Naming convention for Buckets:
+
+- No uppercase
+- No underscore
+- 3-63 characters long
+- Not an IP
+- Must start with lowercase letter or number
+
+## S3 Objects
+Object values are the content of the body, the max Object Size is 5TB (5000GB) but if you are uploading more than 5GB, must use "multi-part upload"
+Also, objects have the following properties:
+
+- Metadata (list of text key / value pairs — system or user metadata)
+- Tags (Unicode key / value pair — up to 10) — useful for security / lifecycle
+- Version ID (if versioning is enabled)
+
+## S3 Versioning
+You can version your files in Amazon S3. Versioning is enabled at the bucket level.
+Same key overwrite will increment the "version": l, 2, 3, etc. It is best practice to version your buckets always because it helps you with the folowing concerns: 
+
+- Protect against unintended deletes (ability to restore a version)
+- Easy roll back to previous version
+
+> Notes:
+>
+> Any file that is not versioned prior to enabling versioning will have version "null"
+>
+> Suspending versioning does not delete the previous versions
+
+## S3 Encryption
+There are 4 methods of encrypting objects in S3
+
+- SSE-S3: encrypts S3 objects using keys handled & managed by AWS (AES-256)
+    - Must set header "x-amz-server-side-encryption":"AES256" when uploading
+    - Downside: The data key is entirely owned by AWS 
+- SSE-KMS: leverage AWS Key Management Service to manage encryption keys (Customer Master Key (CMK))
+    - Must set header "x-amz-server-side-encryption":"aws:kms" when uploading
+    - Advantages: User control and audit trail
+- SSE-C: when you want to manage your own encryption keys
+    - S3 does not store the encryption keys you provide
+    - Must use HTTPS because you're sending a secret to AWS
+    - Encryption keys must be provided in HTTP Headers, for every HTTP request made
+    - When retrieving an object you must provide the same data key that was used to encrypt it in the headers
+- Client Side Encryption (CSE)
+    - Encrypt the object before sending it to AWS using libraries
+    - Clients must encrypt and decrypt data themselves when reading or creating data
+    - Client manages entirely the keys and the encryption cycle
+
+> SSE stands for Server Side Encryption
+
+Amazon S3 exposes 2 endpoints, one HTTP (non encrypted) and another one HTTPS (Encryption in flight). You can use the endpoint you want but HTTPS is recommended, most clients included the aws console use the HTTPS endpoint by default, in the case of SSE-C HTTPS endpoint is mandatory, this encryption in flight is also called SSL/TLS. When using HTTPS data in transit between the client and S3 is going to be fully encrypted.
+
+## S3 Security & Bucket Policies
+There are 2 types of Security on S3
+- User based
+    - IAM policies - which API calls should be allowed for a specific user from IAM console
+- Resource Based
+    - Bucket Policies - bucket wide rules from the S3 console - allows cross account
+    - Object Access Control List (ACL) — finer grain
+    - Bucket Access Control List (ACL) — less common
+
+> Note: an IAM principal can access an S3 object if the user IAM permissions allow it OR the resource policy ALLOWS it AND there's no explicit DENY (If there is adeny in any part then the user cannot access the object)
+
+The Bucket Policies are Json based policies, and they are composite of the following elements:
+
+- Resources: buckets and objects
+- Actions: Set ofAPl to Allow or Deny
+- Effect: Allow / Deny
+- Principal: The account or user to apply the policy to
+
+The Bucket policies are used to:
+
+- Grant public access to the bucket
+- Force objects to be encrypted at upload
+- Grant access to another account (Cross Account)
+
+### Block S3 public access
+Block public access to buckets and objects granted through
+
+- new access control lists (ACLs)
+- any access control lists (ACLs)
+- new public bucket or access point policies
+
+Block public and cross-account access to buckets and objects through any public bucket or access point policies
+
+> These settings were created to prevent company data leaks. If you know your bucket should never be public, leave these on.
+> 
+> Can be set at the account level
+
+### Other S3 security features
+
+- Networking:
+    - Supports VPC Endpoints (for instances in VPC without internet)
+- Logging and Audit:
+    - S3 Access Logs can be stored in other S3 bucket
+    - API calls can be logged in AWS CloudTrail
+- User Security:
+    - MFA Delete: MFA (multi factor authentication) can be required in versioned buckets to delete objects
+- Pre-Signed URLs: URLs that are valid only for a limited time (ex: premium video service for logged in users)
+
+## S3 Websites
+S3 can host static websites and have them accessible on the www
+
+The website URL will be:
+
+- <bucket-name>.s3-website-<AWS-region>.amazonaws.com
+- OR
+- <bucket-name>.s3-website.<AWS-region>.amazonaws.com
+
+If you get a 403 (Forbidden) error, make sure the bucket policy allows public reads!
+
+## S3 Cors
+> A different origin is even one subdomain
+If a client does a cross-origin request on our S3 bucket, we need to enable the correct CORS headers
+> It's a popular exam question
+You can allow for a specific origin or for * (all origins)
 
